@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from '@supabase/supabase-js';
 import { Song, View, Category } from './types';
 import { INITIAL_SONGS, ASSETS } from './constants';
 import NavBar from './components/NavBar';
@@ -18,8 +18,8 @@ import AddSongScreen from './components/AddSongScreen';
 import { translateAuthError, openYouTubeSearch } from './utils';
 
 // --- Supabase Initialization ---
-const SUPABASE_URL = 'https://xcaqfytculpqitgutsbn.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_2PYNrrpOXVCzzWAgDs49AA_2DZtzSUy';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const App: React.FC = () => {
