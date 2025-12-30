@@ -1,0 +1,9 @@
+{
+  "name": "Karaoke Manager",
+  "description": "A comprehensive karaoke management system to organize your repertoire, track performances, and discover new songs with a sleek neon aesthetic.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "clipboard-read"
+  ]
+}
