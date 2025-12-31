@@ -443,16 +443,40 @@ const App: React.FC = () => {
           title: d.title,
           artists: d.artists || [],
           styles: d.styles || [],
-          categories: d.categories || [],// Note: categories might not sync if table not updated, but standard import suggests importing songs
+          categories: d.categories || [],
           duration: d.duration || '4:00',
           thumbnail: d.thumbnail || `https://picsum.photos/400/400?sig=${d.id}`,
-          is_favorite: d.is_favorite || false,
-          added_date: d.added_date || new Date().toISOString(),
-          youtube_url: d.youtube_url,
+          is_favorite: d.isFavorite || d.is_favorite || false,
+          added_date: d.addedDate || d.added_date || new Date().toISOString(),
+          youtube_url: d.youtubeUrl || d.youtube_url,
           key: d.key
         }));
 
-        // Deduplicate by ID to prevent "ON CONFLICT DO UPDATE command cannot affect row a second time"
+        // Merging Strategy:
+        // 1. Map existing DB songs by URL to find matches.
+        // 2. Map current batch URLs to ensure consistency within the import file.
+        // 3. If URL matches, force ID to match existing/seen ID.
+
+        const existingUrlMap = new Map(songs.map(s => [s.youtubeUrl, s.id]));
+        const batchUrlMap = new Map<string, string>();
+
+        formatted.forEach(song => {
+          const url = song.youtube_url;
+          if (url) {
+            // Check against DB
+            if (existingUrlMap.has(url)) {
+              song.id = existingUrlMap.get(url)!;
+            }
+            // Check against batch (dedup duplicates within CSV)
+            else if (batchUrlMap.has(url)) {
+              song.id = batchUrlMap.get(url)!;
+            } else {
+              batchUrlMap.set(url, song.id);
+            }
+          }
+        });
+
+        // Deduplicate by ID (final ensure for upsert)
         const uniqueSongsMap = new Map();
         formatted.forEach(song => {
           uniqueSongsMap.set(song.id, song);
@@ -463,7 +487,7 @@ const App: React.FC = () => {
         const { error } = await supabase.from('songs').upsert(uniqueSongs);
         if (error) throw error;
 
-        alert(`${formatted.length} músicas importadas com sucesso!`);
+        alert(`${uniqueSongs.length} músicas processadas/importadas com sucesso!`);
         await fetchSongs();
         setSettingsOpen(false);
       } catch (err: any) {
