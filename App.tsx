@@ -15,7 +15,9 @@ import AuthScreen from './components/AuthScreen';
 import CategoriesView from './components/CategoriesView';
 import GroupedView from './components/GroupedView';
 import AddSongScreen from './components/AddSongScreen';
-import { translateAuthError, openYouTubeSearch } from './utils';
+import FolderList from './components/FolderList';
+import SettingsModal from './components/SettingsModal';
+import { translateAuthError, openYouTubeSearch, exportToCSV, parseCSV } from './utils';
 
 // --- Supabase Initialization ---
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -32,10 +34,13 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedArtist, setSelectedArtist] = useState<string | null>(null); // New State
+  const [selectedStyle, setSelectedStyle] = useState<string | null>(null);   // New State
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isDark, setIsDark] = useState(true);
   const [editingSong, setEditingSong] = useState<Song | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [pickerSelectedIds, setPickerSelectedIds] = useState<Set<string>>(new Set());
 
@@ -134,18 +139,6 @@ const App: React.FC = () => {
   const existingStyles = useMemo(() => Array.from(new Set(songs.flatMap(s => s.styles))) as string[], [songs]);
   const existingCategoriesStrings = useMemo(() => categories.map(c => c.name), [categories]);
 
-  const groupByArtists = useMemo(() => {
-    const map = new Map<string, Song[]>();
-    filteredSongs.forEach(s => s.artists.forEach(a => map.set(a, [...(map.get(a) || []), s])));
-    return map;
-  }, [filteredSongs]);
-
-  const groupByStyles = useMemo(() => {
-    const map = new Map<string, Song[]>();
-    filteredSongs.forEach(s => s.styles.forEach(st => map.set(st, [...(map.get(st) || []), s])));
-    return map;
-  }, [filteredSongs]);
-
   const relatedSongs = useMemo(() => {
     if (!selectedSong) return [];
     return songs.filter(s =>
@@ -163,6 +156,16 @@ const App: React.FC = () => {
     }
     return filteredSongs.filter(s => s.categories.includes(selectedCategory as string));
   }, [filteredSongs, selectedCategory]);
+
+  const songsInArtist = useMemo(() => {
+    if (!selectedArtist) return [];
+    return filteredSongs.filter(s => s.artists.includes(selectedArtist));
+  }, [filteredSongs, selectedArtist]);
+
+  const songsInStyle = useMemo(() => {
+    if (!selectedStyle) return [];
+    return filteredSongs.filter(s => s.styles.includes(selectedStyle));
+  }, [filteredSongs, selectedStyle]);
 
   const handleToggleFavorite = async (song: Song) => {
     const newVal = !song.isFavorite;
@@ -207,7 +210,12 @@ const App: React.FC = () => {
       if (error) throw error;
       await fetchSongs();
       setEditingSong(null);
-      setView(selectedSong ? 'SONG_DETAILS' : (selectedCategory ? 'CATEGORIES' : 'LIBRARY'));
+      // Return to appropriate view
+      if (selectedSong) setView('SONG_DETAILS');
+      else if (selectedCategory) setView('CATEGORIES');
+      else if (selectedArtist) setView('ARTISTS');
+      else if (selectedStyle) setView('STYLES');
+      else setView('LIBRARY');
     } catch (err) {
       console.error('Error saving song:', err);
       alert('Erro ao salvar música.');
@@ -403,11 +411,83 @@ const App: React.FC = () => {
         setAuthError('');
         setSelectedSong(null);
         setSelectedCategory(null);
+        setSelectedArtist(null);
+        setSelectedStyle(null);
         setView('LIBRARY');
+        setSettingsOpen(false); // Close settings
       }
     });
     setModalOpen(true);
   };
+
+  const handleExport = () => {
+    if (!songs.length) return alert('Não há músicas para exportar.');
+    exportToCSV(songs, `karaoke-backup-${new Date().toISOString().slice(0, 10)}.csv`);
+  };
+
+  const handleImport = (file: File) => {
+    setLoading(true);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const text = e.target?.result as string;
+        if (!text) throw new Error('Falha ao ler arquivo.');
+        const data = parseCSV(text);
+        if (!data.length) throw new Error('Nenhum dado encontrado no CSV.');
+
+        // Validate minimum fields
+        if (!data[0].id || !data[0].title) throw new Error('CSV inválido. Campos id e title são obrigatórios.');
+
+        const formatted = data.map(d => ({
+          id: d.id,
+          title: d.title,
+          artists: d.artists || [],
+          styles: d.styles || [],
+          categories: d.categories || [],// Note: categories might not sync if table not updated, but standard import suggests importing songs
+          duration: d.duration || '4:00',
+          thumbnail: d.thumbnail || `https://picsum.photos/400/400?sig=${d.id}`,
+          is_favorite: d.is_favorite || false,
+          added_date: d.added_date || new Date().toISOString(),
+          youtube_url: d.youtube_url,
+          key: d.key
+        }));
+
+        // Upsert songs
+        const { error } = await supabase.from('songs').upsert(formatted);
+        if (error) throw error;
+
+        alert(`${formatted.length} músicas importadas com sucesso!`);
+        await fetchSongs();
+        setSettingsOpen(false);
+      } catch (err: any) {
+        console.error(err);
+        alert(`Erro na importação: ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleSetView = (v: View) => {
+    // If clicking the current active view, reset its specific selection
+    if (v === view) {
+      if (v === 'CATEGORIES') setSelectedCategory(null);
+      if (v === 'ARTISTS') setSelectedArtist(null);
+      if (v === 'STYLES') setSelectedStyle(null);
+    }
+
+    setView(v);
+    // Be explicit about clearing states depending on the target view
+    if (v !== 'CATEGORIES') setSelectedCategory(null);
+    if (v !== 'ARTISTS') setSelectedArtist(null);
+    if (v !== 'STYLES') setSelectedStyle(null);
+    if (v !== 'SONG_DETAILS') setSelectedSong(null);
+
+    setIsSearching(false);
+    setSearchQuery('');
+    setEditingSong(null);
+  }
 
   if (!isLoggedIn) return <AuthScreen onAuth={handleAuth} authError={authError} clearError={() => setAuthError('')} isLoading={authLoading} />;
 
@@ -435,10 +515,10 @@ const App: React.FC = () => {
               onToggleSearch={() => setIsSearching(!isSearching)}
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
-              onToggleTheme={() => setIsDark(!isDark)}
+              onSettings={() => setSettingsOpen(true)}
               onLogout={handleLogout}
             />
-            <div className="px-5 py-4 space-y-4">
+            <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredSongs.map(song => (
                 <SongCard key={song.id} song={song} onSelect={() => { setSelectedSong(song); setView('SONG_DETAILS'); }} onPlay={() => handlePlaySong(song)} onToggleFavorite={handleToggleFavorite} />
               ))}
@@ -449,47 +529,111 @@ const App: React.FC = () => {
           </div>
         );
       case 'ARTISTS':
+        if (selectedArtist) {
+          return (
+            <div className="flex flex-col min-h-screen pb-32">
+              <Header
+                title={selectedArtist}
+                isSearching={isSearching}
+                onToggleSearch={() => setIsSearching(!isSearching)}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                onSettings={() => setSettingsOpen(true)}
+                onBack={() => setSelectedArtist(null)}
+              />
+              <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {songsInArtist.length > 0 ? (
+                  songsInArtist.map(song => (
+                    <SongCard key={song.id} song={song} onSelect={() => { setSelectedSong(song); setView('SONG_DETAILS'); }} onPlay={() => handlePlaySong(song)} onToggleFavorite={handleToggleFavorite} />
+                  ))
+                ) : (
+                  <div className="py-20 text-center flex flex-col items-center col-span-full">
+                    <span className="material-symbols-outlined text-gray-400 text-6xl mb-4">folder_open</span>
+                    <p className="text-gray-500 font-medium">Nenhuma música deste artista.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        }
         return (
           <div className="flex flex-col min-h-screen pb-32">
             <Header
               title="Artistas"
+              subtitle={`${existingArtists.length} encontrados`}
               isSearching={isSearching}
               onToggleSearch={() => setIsSearching(!isSearching)}
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
-              onToggleTheme={() => setIsDark(!isDark)}
+              onSettings={() => setSettingsOpen(true)}
               onLogout={handleLogout}
             />
-            <GroupedView grouped={groupByArtists} onSelectSong={(s) => { setSelectedSong(s); setView('SONG_DETAILS'); }} onPlaySong={handlePlaySong} onToggleFavorite={handleToggleFavorite} />
+            <FolderList
+              items={existingArtists.filter(a => a.toLowerCase().includes(searchQuery.toLowerCase()))}
+              onSelect={(artist) => setSelectedArtist(artist)}
+              icon="mic"
+            />
           </div>
         );
       case 'STYLES':
+        if (selectedStyle) {
+          return (
+            <div className="flex flex-col min-h-screen pb-32">
+              <Header
+                title={selectedStyle}
+                isSearching={isSearching}
+                onToggleSearch={() => setIsSearching(!isSearching)}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                onSettings={() => setSettingsOpen(true)}
+                onBack={() => setSelectedStyle(null)}
+              />
+              <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {songsInStyle.length > 0 ? (
+                  songsInStyle.map(song => (
+                    <SongCard key={song.id} song={song} onSelect={() => { setSelectedSong(song); setView('SONG_DETAILS'); }} onPlay={() => handlePlaySong(song)} onToggleFavorite={handleToggleFavorite} />
+                  ))
+                ) : (
+                  <div className="py-20 text-center flex flex-col items-center col-span-full">
+                    <span className="material-symbols-outlined text-gray-400 text-6xl mb-4">music_note</span>
+                    <p className="text-gray-500 font-medium">Nenhuma música deste estilo.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
         return (
           <div className="flex flex-col min-h-screen pb-32">
             <Header
               title="Estilos"
+              subtitle={`${existingStyles.length} encontrados`}
               isSearching={isSearching}
               onToggleSearch={() => setIsSearching(!isSearching)}
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
-              onToggleTheme={() => setIsDark(!isDark)}
+              onSettings={() => setSettingsOpen(true)}
               onLogout={handleLogout}
             />
-            <GroupedView grouped={groupByStyles} onSelectSong={(s) => { setSelectedSong(s); setView('SONG_DETAILS'); }} onPlaySong={handlePlaySong} onToggleFavorite={handleToggleFavorite} />
+            <FolderList
+              items={existingStyles.filter(s => s.toLowerCase().includes(searchQuery.toLowerCase()))}
+              onSelect={(style) => setSelectedStyle(style)}
+              icon="music_note"
+            />
           </div>
         );
       case 'CATEGORIES':
         if (selectedCategory) {
           return (
             <div className="flex flex-col min-h-screen pb-32">
-              <Header title={selectedCategory} isSearching={isSearching} onToggleSearch={() => setIsSearching(!isSearching)} searchQuery={searchQuery} setSearchQuery={setSearchQuery} onToggleTheme={() => setIsDark(!isDark)} onBack={() => setSelectedCategory(null)} />
-              <div className="px-5 py-4 space-y-4">
+              <Header title={selectedCategory} isSearching={isSearching} onToggleSearch={() => setIsSearching(!isSearching)} searchQuery={searchQuery} setSearchQuery={setSearchQuery} onSettings={() => setSettingsOpen(true)} onBack={() => setSelectedCategory(null)} />
+              <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 {songsInCategory.length > 0 ? (
                   songsInCategory.map(song => (
                     <SongCard key={song.id} song={song} onSelect={() => { setSelectedSong(song); setView('SONG_DETAILS'); }} onPlay={() => handlePlaySong(song)} onToggleFavorite={handleToggleFavorite} />
                   ))
                 ) : (
-                  <div className="py-20 text-center flex flex-col items-center">
+                  <div className="py-20 text-center flex flex-col items-center col-span-full">
                     <span className="material-symbols-outlined text-gray-400 text-6xl mb-4">folder_open</span>
                     <p className="text-gray-500 font-medium">Nenhuma música nesta categoria.</p>
                   </div>
@@ -513,7 +657,7 @@ const App: React.FC = () => {
               onToggleSearch={() => setIsSearching(!isSearching)}
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
-              onToggleTheme={() => setIsDark(!isDark)}
+              onSettings={() => setSettingsOpen(true)}
               onLogout={handleLogout}
             />
             <div className="pb-10">
@@ -543,7 +687,7 @@ const App: React.FC = () => {
               onToggleSearch={() => setIsSearching(!isSearching)}
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
-              onToggleTheme={() => setIsDark(!isDark)}
+              onSettings={() => setSettingsOpen(true)}
               onBack={() => setView('CATEGORIES')}
               rightAction={
                 <button onClick={handleUpdateCategorySongs} className="px-5 py-2.5 bg-primary text-white text-sm font-bold rounded-xl shadow-md">
@@ -572,7 +716,13 @@ const App: React.FC = () => {
         );
       case 'ADD_SONG':
         return <AddSongScreen
-          onCancel={() => { setEditingSong(null); setView(selectedCategory ? 'CATEGORIES' : 'LIBRARY'); }}
+          onCancel={() => {
+            setEditingSong(null);
+            // Return to context-aware previous view
+            if (selectedArtist) setView('ARTISTS');
+            else if (selectedStyle) setView('STYLES');
+            else setView(selectedCategory ? 'CATEGORIES' : 'LIBRARY');
+          }}
           onSave={handleSaveSong}
           existingArtists={existingArtists}
           existingStyles={existingStyles}
@@ -584,7 +734,15 @@ const App: React.FC = () => {
         return selectedSong ? (
           <div className="flex flex-col min-h-screen pb-32">
             <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md">
-              <button onClick={() => setView('LIBRARY')} className="size-10 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+              <button
+                onClick={() => {
+                  // Logic to return to the correct parent view (Artist list, Style list, Category list, or Library)
+                  if (selectedArtist) setView('ARTISTS');
+                  else if (selectedStyle) setView('STYLES');
+                  else if (selectedCategory) setView('CATEGORIES');
+                  else setView('LIBRARY');
+                }}
+                className="size-10 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
                 <span className="material-symbols-outlined text-gray-900 dark:text-white">arrow_back_ios_new</span>
               </button>
               <h2 className="text-base font-bold text-gray-900 dark:text-white">Detalhes</h2>
@@ -647,12 +805,21 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background-light dark:bg-background-dark text-gray-900 dark:text-white transition-colors">
+    <div className="min-h-screen flex flex-col bg-background-light dark:bg-background-dark text-gray-900 dark:text-white transition-colors max-w-4xl mx-auto border-x border-gray-100 dark:border-white/5 shadow-2xl">
       {loading && <LoadingOverlay />}
       <Modal isOpen={modalOpen} config={modalConfig} onClose={() => setModalOpen(false)} />
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onToggleTheme={() => setIsDark(!isDark)}
+        onLogout={handleLogout}
+        onExport={handleExport}
+        onImport={handleImport}
+        isDark={isDark}
+      />
       <div className="flex-1">{renderContent()}</div>
       {['LIBRARY', 'ARTISTS', 'STYLES', 'CATEGORIES', 'SONG_DETAILS'].includes(view) && (
-        <NavBar currentView={view === 'SONG_DETAILS' ? 'LIBRARY' : view} onSetView={(v) => { setView(v); setSelectedCategory(null); setIsSearching(false); setSearchQuery(''); setEditingSong(null); }} />
+        <NavBar currentView={view === 'SONG_DETAILS' ? 'LIBRARY' : view} onSetView={handleSetView} />
       )}
     </div>
   );

@@ -8,11 +8,10 @@ const Header: React.FC<{
     onToggleSearch: () => void;
     searchQuery: string;
     setSearchQuery: (q: string) => void;
-    onToggleTheme: () => void;
+    onSettings?: () => void;
     onBack?: () => void;
     rightAction?: React.ReactNode;
-    onLogout?: () => void;
-}> = ({ title, subtitle, isSearching, onToggleSearch, searchQuery, setSearchQuery, onToggleTheme, onBack, rightAction, onLogout }) => (
+}> = ({ title, subtitle, isSearching, onToggleSearch, searchQuery, setSearchQuery, onBack, rightAction, onSettings }) => (
     <header className="sticky top-0 z-50 w-full bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-gray-200 dark:border-white/5 px-5 py-4 flex items-center justify-between min-h-[72px]">
         {isSearching ? (
             <SearchBar query={searchQuery} setQuery={setSearchQuery} onClose={onToggleSearch} />
@@ -31,16 +30,11 @@ const Header: React.FC<{
                 </div>
                 <div className="flex items-center gap-2">
                     {rightAction}
-                    {onLogout && (
-                        <button onClick={onLogout} className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors" title="Sair">
-                            <span className="material-symbols-outlined text-[20px]">logout</span>
-                        </button>
-                    )}
-                    <button onClick={onToggleTheme} className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">
-                        <span className="material-symbols-outlined text-[20px]">brightness_4</span>
-                    </button>
                     <button onClick={onToggleSearch} className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-all active:scale-95">
                         <span className="material-symbols-outlined text-[24px]">search</span>
+                    </button>
+                    <button onClick={onSettings} className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">
+                        <span className="material-symbols-outlined text-[24px]">settings</span>
                     </button>
                 </div>
             </>
