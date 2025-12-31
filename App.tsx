@@ -452,8 +452,15 @@ const App: React.FC = () => {
           key: d.key
         }));
 
+        // Deduplicate by ID to prevent "ON CONFLICT DO UPDATE command cannot affect row a second time"
+        const uniqueSongsMap = new Map();
+        formatted.forEach(song => {
+          uniqueSongsMap.set(song.id, song);
+        });
+        const uniqueSongs = Array.from(uniqueSongsMap.values());
+
         // Upsert songs
-        const { error } = await supabase.from('songs').upsert(formatted);
+        const { error } = await supabase.from('songs').upsert(uniqueSongs);
         if (error) throw error;
 
         alert(`${formatted.length} músicas importadas com sucesso!`);
