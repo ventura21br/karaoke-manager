@@ -8,9 +8,11 @@ interface SettingsModalProps {
     onExport: () => void;
     onImport: (file: File) => void;
     isDark: boolean;
+    userEmail?: string;
+    onDeleteAll: () => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onToggleTheme, onLogout, onExport, onImport, isDark }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onToggleTheme, onLogout, onExport, onImport, isDark, userEmail, onDeleteAll }) => {
     if (!isOpen) return null;
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -23,7 +25,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onToggle
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
             <div className="bg-white dark:bg-[#1e1e24] w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-gray-100 dark:border-white/5 mx-auto transform transition-all scale-100 animate-scaleIn">
                 <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Configurações</h3>
+                    <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Configurações</h3>
+                        {userEmail && <p className="text-xs text-gray-500 font-medium break-all">{userEmail}</p>}
+                    </div>
                     <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 text-gray-500">
                         <span className="material-symbols-outlined">close</span>
                     </button>
@@ -80,6 +85,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onToggle
                             </div>
                         </button>
                     </div>
+
+                    {/* Delete All Data */}
+                    <button
+                        onClick={onDeleteAll}
+                        className="w-full flex items-center gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+                    >
+                        <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-500/20 flex items-center justify-center text-red-600 dark:text-red-400">
+                            <span className="material-symbols-outlined">delete_forever</span>
+                        </div>
+                        <div className="text-left">
+                            <span className="block font-bold text-gray-900 dark:text-white leading-tight">Zerar Dados</span>
+                            <span className="text-xs text-gray-500 font-medium font-bold text-red-500">Excluir tudo (CUIDADO)</span>
+                        </div>
+                    </button>
 
                     {/* Logout */}
                     {onLogout && (

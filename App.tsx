@@ -41,6 +41,7 @@ const App: React.FC = () => {
   const [isDark, setIsDark] = useState(true);
   const [editingSong, setEditingSong] = useState<Song | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
 
   const [pickerSelectedIds, setPickerSelectedIds] = useState<Set<string>>(new Set());
 
@@ -60,11 +61,13 @@ const App: React.FC = () => {
     // Check initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setIsLoggedIn(!!session);
+      if (session?.user?.email) setUserEmail(session.user.email);
     });
 
     // Subscribe to auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session);
+      if (session?.user?.email) setUserEmail(session.user.email);
       if (!session) {
         setSongs([]);
         setCategories([]);
@@ -423,6 +426,35 @@ const App: React.FC = () => {
         setSelectedStyle(null);
         setView('LIBRARY');
         setSettingsOpen(false); // Close settings
+      }
+    });
+    setModalOpen(true);
+  };
+
+  const handleDeleteAllSongs = () => {
+    setModalConfig({
+      type: 'confirm',
+      title: 'Zerar Dados',
+      message: 'Tem certeza absoluta? Isso excluirá TODAS as suas músicas cadastradas. Essa ação não pode ser desfeita.',
+      onConfirm: async () => {
+        setModalOpen(false);
+        setLoading(true);
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) throw new Error('Usuário não autenticado');
+
+          const { error } = await supabase.from('songs').delete().eq('user_id', user.id);
+          if (error) throw error;
+
+          setSongs([]);
+          alert('Todas as músicas foram excluídas.');
+          setSettingsOpen(false);
+        } catch (err: any) {
+          console.error(err);
+          alert('Erro ao excluir dados.');
+        } finally {
+          setLoading(false);
+        }
       }
     });
     setModalOpen(true);
@@ -859,6 +891,8 @@ const App: React.FC = () => {
         onExport={handleExport}
         onImport={handleImport}
         isDark={isDark}
+        userEmail={userEmail}
+        onDeleteAll={handleDeleteAllSongs}
       />
       <div className="flex-1">{renderContent()}</div>
       {['LIBRARY', 'ARTISTS', 'STYLES', 'CATEGORIES', 'SONG_DETAILS'].includes(view) && (
