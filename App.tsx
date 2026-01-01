@@ -527,6 +527,23 @@ const App: React.FC = () => {
         });
         const uniqueSongs = Array.from(uniqueSongsMap.values());
 
+        // Upsert Categories first
+        const allCategories = new Set<string>();
+        formatted.forEach(s => s.categories.forEach(c => allCategories.add(c)));
+
+        if (allCategories.size > 0 && userId) {
+          const categoryPayload = Array.from(allCategories).map(name => ({
+            name,
+            user_id: userId
+          }));
+          const { error: catError } = await supabase
+            .from('categories')
+            .upsert(categoryPayload, { onConflict: 'user_id, name', ignoreDuplicates: true });
+
+          if (catError) console.error('Error importing categories:', catError);
+          else await fetchCategories();
+        }
+
         // Upsert songs
         const { error } = await supabase.from('songs').upsert(uniqueSongs);
         if (error) throw error;
