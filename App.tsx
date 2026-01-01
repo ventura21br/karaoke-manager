@@ -446,6 +446,9 @@ const App: React.FC = () => {
         // Validate minimum fields
         if (!data[0].id || !data[0].title) throw new Error('CSV inválido. Campos id e title são obrigatórios.');
 
+        const { data: { user } } = await supabase.auth.getUser();
+        const userId = user?.id;
+
         const formatted = data.map(d => ({
           id: d.id,
           title: d.title,
@@ -458,7 +461,7 @@ const App: React.FC = () => {
           added_date: d.addedDate || d.added_date || new Date().toISOString(),
           youtube_url: d.youtubeUrl || d.youtube_url,
           key: d.key,
-          user_id: (await supabase.auth.getUser()).data.user?.id
+          user_id: userId
         }));
 
         // Merging Strategy:
