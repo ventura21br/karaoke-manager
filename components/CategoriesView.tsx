@@ -24,7 +24,7 @@ const CategoriesView: React.FC<{
             </div>
         </div>
 
-        {categories.sort((a, b) => a.name.localeCompare(b.name)).map(cat => (
+        {[...categories].sort((a, b) => a.name.localeCompare(b.name)).map(cat => (
             <div
                 key={cat.id}
                 className="relative group bg-card-light dark:bg-card-dark rounded-2xl border border-black/5 dark:border-white/5 shadow-sm overflow-hidden"
