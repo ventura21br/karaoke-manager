@@ -12,7 +12,7 @@ const Modal: React.FC<{
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
             <div className="bg-white dark:bg-[#1e1e24] w-full max-w-xs sm:max-w-sm rounded-3xl p-6 shadow-2xl border border-gray-100 dark:border-white/5 transform transition-all scale-100 animate-scaleIn">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{config.title}</h3>
                 {config.message && <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 leading-relaxed">{config.message}</p>}

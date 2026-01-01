@@ -76,7 +76,9 @@ const App: React.FC = () => {
 
   const fetchSongs = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from('songs').select('*').order('title', { ascending: true });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data, error } = await supabase.from('songs').select('*').eq('user_id', session.user.id).order('title', { ascending: true });
       if (error) throw error;
       if (data) {
         setSongs((data as any[]).map((d: any) => ({
@@ -102,7 +104,9 @@ const App: React.FC = () => {
 
   const fetchCategories = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from('categories').select('*').order('name', { ascending: true });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data, error } = await supabase.from('categories').select('*').eq('user_id', session.user.id).order('name', { ascending: true });
       if (error) throw error;
       if (data) setCategories(data as Category[]);
     } catch (err) {
@@ -204,7 +208,8 @@ const App: React.FC = () => {
         is_favorite: songData.isFavorite ?? false,
         added_date: songData.addedDate || new Date().toLocaleDateString('pt-BR'),
         youtube_url: songData.youtubeUrl,
-        key: songData.key
+        key: songData.key,
+        user_id: (await supabase.auth.getUser()).data.user?.id
       };
       const { error } = await supabase.from('songs').upsert(dbSong);
       if (error) throw error;
@@ -285,7 +290,10 @@ const App: React.FC = () => {
         setModalOpen(false);
         setLoading(true);
         try {
-          const { error } = await supabase.from('categories').insert({ name: name.trim() });
+
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) throw new Error('Usuário não autenticado');
+          const { error } = await supabase.from('categories').insert({ name: name.trim(), user_id: user.id });
           if (error) throw error;
           await fetchCategories();
         } catch (err: any) {
@@ -449,7 +457,8 @@ const App: React.FC = () => {
           is_favorite: d.isFavorite || d.is_favorite || false,
           added_date: d.addedDate || d.added_date || new Date().toISOString(),
           youtube_url: d.youtubeUrl || d.youtube_url,
-          key: d.key
+          key: d.key,
+          user_id: (await supabase.auth.getUser()).data.user?.id
         }));
 
         // Merging Strategy:
